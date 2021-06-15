@@ -364,7 +364,7 @@ public class Main extends Application {
 
                 fontJson.append("\t\t{\n" +
                         "\t\t\t\"type\": \"bitmap\",\n" +
-                        "\t\t\t\"file\": \"minecraft:font/"+s+"/" +ym.name + ".png" +  "\",\n" +
+                        "\t\t\t\"file\": \"minecraft:textures/font/"+s+"/" +ym.name + ".png" +  "\",\n" +
                         "\t\t\t\"height\": 7,\n" +
                         "\t\t\t\"ascent\": 7,\n" +
                         "\t\t\t\"chars\": [\n" +
@@ -399,7 +399,7 @@ public class Main extends Application {
             e.printStackTrace();
         }
 
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/default.json"))) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/default.json"))) {
             final int aLength = fontJson.length();
             final int aChunk = 1024;// 1 kb buffer to read data from
             final char[] aChars = new char[aChunk];
