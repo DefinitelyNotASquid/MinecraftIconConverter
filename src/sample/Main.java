@@ -141,8 +141,6 @@ public class Main extends Application {
             File textures = new File(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures");
             File font = new File(System.getProperty("user.dir") + "/DataPack/assets/minecraft/font");
             File textures_font = new File(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/");
-            File destinationfile = new File(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/");
-            Path destination = Paths.get(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/");
 
             if (!DataPack.exists()) {
                 DataPack.mkdir();
@@ -163,13 +161,7 @@ public class Main extends Application {
                 textures_font.mkdir();
             }
 
-            Path icon_path = Paths.get(System.getProperty("user.dir") + "/Icons/");
-            try {
-                deleteDir(destinationfile);
-                copyFolder(icon_path, destination);
-            } catch (IOException ioException) {
-                ioException.printStackTrace();
-            }
+
 
             List<String> sl = new ArrayList<>();
             if (biome.isSelected()) {
@@ -194,15 +186,15 @@ public class Main extends Application {
                 sl.add("inv");
             }
 
-            try {
-                generateFontAndMappingFile(sl);
-            } catch (IOException ioException) {
-                ioException.printStackTrace();
-            }
-
         });
 
         convertMappings.setOnAction(e -> {
+
+            try {
+                renameEmojis();
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
 
             String BiomePath = System.getProperty("user.dir") + "/Unmapped/" + "biome.txt";
             String BlockPath = System.getProperty("user.dir") + "/Unmapped/" + "block.txt";
@@ -267,39 +259,82 @@ public class Main extends Application {
                 sl.add("inv");
             }
 
-            List<FinalMap> fullMap = new ArrayList<>();
+            StringBuilder fontJson = new StringBuilder();
+
+            fontJson.append("{\n" +
+                    "\t\"providers\": [\n" +
+                    "\t\t{");
+            fontJson.append("\n" +
+                    "\t\t\t\"type\": \"bitmap\",\n" +
+                    "\t\t\t\"file\": \"minecraft:font/minecraft_0.png\",\n" +
+                    "\t\t\t\"width\": 8,\n" +
+                    "\t\t\t\"height\": 8,\n" +
+                    "\t\t\t\"ascent\": 7,\n" +
+                    "\t\t\t\"chars\": [\n\t\t\t\t");
+
+            List<FinalMap> minecraftMap = new ArrayList<>();
             try {
-                fullMap = arrange(sl);
+                minecraftMap = arrange(sl);
             } catch (IOException e1) {
                 e1.printStackTrace();
             }
 
-            System.out.println("Size : " + fullMap.size());
+            int codePoint = 983040;
+            int codePointEmoji = 993040;
 
-            for (FinalMap y : fullMap) {
-                System.out.println("Mapping: " + y.getName());
-                try {
+            fontJson = writeSection(codePoint, "minecraft", minecraftMap, fontJson);
 
-                    File directory = new File(System.getProperty("user.dir") + "/Icons/" + y.getType());
-                    if (!directory.exists()) {
-                        directory.mkdir();
-                        // If you require it to make the entire directory path including parents,
-                        // use directory.mkdirs(); here instead.
-                    }
+            fontJson.append("]\n" +
+                    "\t\t}," +
+                    "\n\t\t{\n" +
+                    "\t\t\t\"type\": \"bitmap\",\n" +
+                    "\t\t\t\"file\": \"minecraft:font/emoji_0.png\",\n" +
+                    "\t\t\t\"width\": 8,\n" +
+                    "\t\t\t\"height\": 8,\n" +
+                    "\t\t\t\"ascent\": 7,\n" +
+                    "\t\t\t\"chars\": [\n\t\t\t\t");
 
-                    if (y.name.contains("?")) {
-                        System.out.println("WARNING Contains ? : " + y.getType() + " , " + y.getName());
-                        ImageIO.write(y.getIcon(), "png", new File(System.getProperty("user.dir") + "/Icons/" + y.getType() + "/" + y.getName().replace("?", "QuestionMark") + ".png"));
-                    } else {
-                        ImageIO.write(y.getIcon(), "png", new File(System.getProperty("user.dir") + "/Icons/" + y.getType() + "/" + y.getName() + ".png"));
-                    }
-
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+            try {
+                List<FinalMap> mapList = getEmojisAsImageMap();
+                fontJson = writeSection(codePointEmoji, "emoji", mapList, fontJson);
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
             }
 
+            fontJson.append("]\n" +
+                    "\t\t}\n" +
+                    "\t]\n" +
+                    "}");
+
+            try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/DataPack/assets/minecraft/font/default.json"))) {
+                final int aLength = fontJson.length();
+                final int aChunk = 1024;// 1 kb buffer to read data from
+                final char[] aChars = new char[aChunk];
+
+                for (int aPosStart = 0; aPosStart < aLength; aPosStart += aChunk) {
+                    final int aPosEnd = Math.min(aPosStart + aChunk, aLength);
+                    fontJson.getChars(aPosStart, aPosEnd, aChars, 0); // Create no new buffer
+                    bw.write(aChars, 0, aPosEnd - aPosStart);// This is faster than just copying one byte at the time
+                }
+                bw.flush();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+
+            File destinationfile = new File(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/");
+            Path destination = Paths.get(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/");
+            Path icon_path = Paths.get(System.getProperty("user.dir") + "/Icons/");
+            try {
+                deleteDir(destinationfile);
+                copyFolder(icon_path, destination);
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
+
+            System.out.println("Finished Creating Data Pack");
+
         });
+
         MainBorderPane.add(toolBar, 0, 2);
 
         Scene MainScene = new Scene(tabPane, 640, 480);
@@ -312,8 +347,108 @@ public class Main extends Application {
             e.consume();
             ConfirmBox.handleClose(window, "Exit", "Sure you want to exit?");
         });
+    }
+
+    public StringBuilder writeSection(int codePoint, String sheetType, List<FinalMap> fullMap, StringBuilder fontJson){
+
+        StringBuilder typeMappingsFile = new StringBuilder();
+        int sheetName = 0;
+        int count = 0;
+        BufferedImage bi = new BufferedImage(72,18432, BufferedImage.TYPE_INT_ARGB);
+
+        int subVal = 0;
+        int amount = 1;
+
+        for (FinalMap y : fullMap) {
 
 
+
+            Graphics g = bi.getGraphics();
+            g.drawImage(y.getIcon(), 0, 72*subVal, null);
+            g.dispose();
+            if(count != 0 && count%256==0){
+
+                fontJson.append("]\n" +
+                        "\t\t}," +
+                        "\n\t\t{\n" +
+                        "\t\t\t\"type\": \"bitmap\",\n" +
+                        "\t\t\t\"file\": \"minecraft:font/"+sheetType+"_"+amount+".png\",\n" +
+                        "\t\t\t\"width\": 8,\n" +
+                        "\t\t\t\"height\": 8,\n" +
+                        "\t\t\t\"ascent\": 7,\n" +
+                        "\t\t\t\"chars\": [\n\t\t\t\t");
+                amount++;
+
+
+                subVal=0;
+                try {
+
+                    ImageIO.write(bi, "png", new File(System.getProperty("user.dir")+ "/Icons/" +sheetType+"_"+sheetName+ ".png"));
+                    clearImage(bi);
+
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+                sheetName++;
+            }
+
+
+            char[] charPair = Character.toChars(codePoint + count);
+            String symbol = new String(charPair);
+
+            typeMappingsFile.append(symbol + ":" + y.name + "\n");
+
+            fontJson.append("\""+symbol+"\""+"");
+
+            if((count + 1)%256 != 0 && count != fullMap.size()-1){
+                fontJson.append(",");
+            }
+            if((count + 1)%8 == 0){
+                fontJson.append("\n\t\t\t\t");
+            }
+
+
+            subVal++;
+            count++;
+        }
+
+        BufferedImage croppedImage = bi.getSubimage(
+                0,
+                0,
+                72,
+                fullMap.size()%256*72
+        );
+
+        try {
+            ImageIO.write(croppedImage, "png", new File(System.getProperty("user.dir")+ "/Icons/" + sheetType+"_" +sheetName + ".png"));
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/" + sheetType + ".txt"))) {
+            final int aLength = typeMappingsFile.length();
+            final int aChunk = 1024;// 1 kb buffer to read data from
+            final char[] aChars = new char[aChunk];
+
+            for (int aPosStart = 0; aPosStart < aLength; aPosStart += aChunk) {
+                final int aPosEnd = Math.min(aPosStart + aChunk, aLength);
+                typeMappingsFile.getChars(aPosStart, aPosEnd, aChars, 0); // Create no new buffer
+                bw.write(aChars, 0, aPosEnd - aPosStart);// This is faster than just copying one byte at the time
+            }
+            bw.flush();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        return fontJson;
+    }
+
+    public static void clearImage(BufferedImage bufferedImage) {
+        Graphics2D g = bufferedImage.createGraphics();
+        g.setBackground(new Color(0, 0, 0, 0));
+        g.clearRect(0, 0, bufferedImage.getWidth(),
+                bufferedImage.getHeight());
+        g.dispose();// w  ww . j  a  v  a  2 s.  c  om
     }
 
     public void deleteDir(File file) {
@@ -326,97 +461,58 @@ public class Main extends Application {
         file.delete();
     }
 
-    public void generateFontAndMappingFile(List<String> mappingSelection) throws IOException {
 
-        StringBuilder mainMapping = new StringBuilder();
-        StringBuilder fontJson = new StringBuilder();
+    public void renameEmojis() throws IOException {
 
-        fontJson.append("{\n" +
-                "\t\"providers\": [");
+        InputStream is = new FileInputStream(System.getProperty("user.dir") + "/EmojiData/data/emojis.csv");
+        BufferedReader buf = new BufferedReader(new InputStreamReader(is));
 
+        String line = buf.readLine();
 
-        int codePoint = 983040;
+        while (line != null) {
 
-        int count = 0;
-
-        for (String s : mappingSelection) {
-
-            List<YamlMap> readmapping = new ArrayList<YamlMap>();
-            InputStream is = new FileInputStream(System.getProperty("user.dir") + "/Mapped/" + s + ".yaml");
-            System.out.println("Reading file to parse int : " + s);
-            BufferedReader buf = new BufferedReader(new InputStreamReader(is));
-
-            String line = buf.readLine();
-            StringBuilder sb = new StringBuilder();
-
-            while (line != null) {
-
-                String[] arrOfStr = line.split(":");
-                YamlMap yamlmap = new YamlMap(arrOfStr[0], Integer.parseInt(arrOfStr[1]));
-                readmapping.add(yamlmap);
-                line = buf.readLine();
-            }
-            Collections.sort(readmapping);
-            for (YamlMap ym : readmapping) {
-                char[] charPair = Character.toChars(codePoint + count);
-                String symbol = new String(charPair);
-                mainMapping.append(symbol + ":" + ym.name + "\n");
-
-                fontJson.append("\t\t{\n" +
-                        "\t\t\t\"type\": \"bitmap\",\n" +
-                        "\t\t\t\"file\": \"minecraft:textures/font/"+s+"/" +ym.name + ".png" +  "\",\n" +
-                        "\t\t\t\"height\": 7,\n" +
-                        "\t\t\t\"ascent\": 7,\n" +
-                        "\t\t\t\"chars\": [\n" +
-                        "\t\t\t\t\""+ symbol +"\"\n" +
-                        "\t\t\t]\n" +
-                        "\t\t}");
-                if(!((readmapping.indexOf(ym) == readmapping.size() -1) && (mappingSelection.indexOf(s) == mappingSelection.size() -1))){
-                    fontJson.append(",");
+            String[] arrOfStr = line.split(",");
+            File f = new File(System.getProperty("user.dir") + "/EmojiData/icons/"+ arrOfStr[0] + ".png");
+            if(f.exists()){
+                boolean renameResult = f.renameTo(new File(System.getProperty("user.dir") + "/EmojiData/icons/"+ arrOfStr[1] + ".png"));
+                if(renameResult){
+                    System.out.println("Rename Success");
+                }else{
+                    System.out.println("Rename Failed");
                 }
-                else{
-                    fontJson.append("\n" +
-                            "\t]\n" +
-                            "}");
-                }
-
-                count++;
+            }else{
+                System.out.println("File Not Exist");
             }
+
+
+            line = buf.readLine();
         }
-
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/Minecraft.txt"))) {
-            final int aLength = mainMapping.length();
-            final int aChunk = 1024;// 1 kb buffer to read data from
-            final char[] aChars = new char[aChunk];
-
-            for (int aPosStart = 0; aPosStart < aLength; aPosStart += aChunk) {
-                final int aPosEnd = Math.min(aPosStart + aChunk, aLength);
-                mainMapping.getChars(aPosStart, aPosEnd, aChars, 0); // Create no new buffer
-                bw.write(aChars, 0, aPosEnd - aPosStart);// This is faster than just copying one byte at the time
-            }
-            bw.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(System.getProperty("user.dir") + "/DataPack/assets/minecraft/textures/font/default.json"))) {
-            final int aLength = fontJson.length();
-            final int aChunk = 1024;// 1 kb buffer to read data from
-            final char[] aChars = new char[aChunk];
-
-            for (int aPosStart = 0; aPosStart < aLength; aPosStart += aChunk) {
-                final int aPosEnd = Math.min(aPosStart + aChunk, aLength);
-                fontJson.getChars(aPosStart, aPosEnd, aChars, 0); // Create no new buffer
-                bw.write(aChars, 0, aPosEnd - aPosStart);// This is faster than just copying one byte at the time
-            }
-            bw.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        System.out.println("Finished Creating Data Pack");
     }
 
+    public List<FinalMap> getEmojisAsImageMap() throws IOException {
+
+        List<FinalMap> readmapping = new ArrayList<FinalMap>();
+        InputStream is = new FileInputStream(System.getProperty("user.dir") + "/EmojiData/emojis.txt");
+        BufferedReader buf = new BufferedReader(new InputStreamReader(is));
+
+        String line = buf.readLine();
+
+        while (line != null) {
+
+            FinalMap finalMap = new FinalMap();
+            BufferedImage buffImage = ImageIO.read(new File(System.getProperty("user.dir") + "/EmojiData/icons/" + line + ".png"));
+
+            finalMap.setIcon(buffImage);
+            finalMap.setName(line);
+            finalMap.setType("Emojis");
+
+            readmapping.add(finalMap);
+
+            line = buf.readLine();
+        }
+
+        return readmapping;
+    }
 
     public List<FinalMap> arrange(List<String> fileList) throws IOException {
 
@@ -430,7 +526,6 @@ public class Main extends Application {
             BufferedReader buf = new BufferedReader(new InputStreamReader(is));
 
             String line = buf.readLine();
-            StringBuilder sb = new StringBuilder();
 
             while (line != null) {
 
@@ -445,11 +540,11 @@ public class Main extends Application {
             BufferedImage bigImg = ImageIO.read(new File(System.getProperty("user.dir") + "/Sprites/" + s + ".png"));
 
 
-            final int width = 32;
-            final int height = 32;
+            final int width = 72;
+            final int height = 72;
 
-            final int rows = bigImg.getHeight() / 32;
-            final int cols = bigImg.getWidth() / 32;
+            final int rows = bigImg.getHeight() / 72;
+            final int cols = bigImg.getWidth() / 72;
 
             System.out.println("Image File Information: \n Width: " + width + " Height: " + height + " Rows: " + rows + " Cols: " + cols + " Name: " + s + ".png");
 
@@ -560,6 +655,11 @@ public class Main extends Application {
         String preformat16 = ",";
         String preformat17 = "{";
         String preformat18 = "*";
+        String preformat19 = "(";
+        String preformat20 = ")";
+        String preformat21 = "+";
+        String preformat22 = "!";
+        String preformat23 = "???";
 
         fileReadString = fileReadString.replace(pos, "pos ");
         fileReadString = fileReadString.replaceAll("\tids = .*", "");
@@ -597,6 +697,11 @@ public class Main extends Application {
         fileReadString = fileReadString.replace(preformat16, "");
         fileReadString = fileReadString.replace(preformat17, "");
         fileReadString = fileReadString.replace(preformat18, "");
+        fileReadString = fileReadString.replace(preformat19, "");
+        fileReadString = fileReadString.replace(preformat20, "");
+        fileReadString = fileReadString.replace(preformat21, "-plus");
+        fileReadString = fileReadString.replace(preformat22, "-exclamation-mark");
+        fileReadString = fileReadString.replace(preformat23, "three-question-marks");
         fileReadString = fileReadString.replace("'", "");
         fileReadString = fileReadString.replaceAll("(?m)^[ \t]*\r?\n", "");
         fileReadString = fileReadString.replace(" ", "-");
